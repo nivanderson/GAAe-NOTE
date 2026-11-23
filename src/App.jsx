@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { deleteItems, loadItems, saveItems, sortItems } from './db'
 
 const STORAGE_KEY = 'gaae-acoes-teca-v1'
 const STATUSES = [
@@ -142,16 +143,65 @@ function App() {
   const [commentText, setCommentText] = useState('')
   const [draggedId, setDraggedId] = useState(null)
 
-  const persistItems = (nextItems) => {
-    setItems(nextItems)
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextItems))
-      setStorageError('')
-    } catch (error) {
-      console.error('Não foi possível salvar os dados locais:', error)
-      setStorageError('Não foi possível salvar as alterações neste navegador.')
-    }
+  const [sync, setSync] = useState('loading') // loading | saved | saving | error
+  const itemsRef = useRef(items)
+  const pendingRef = useRef(0)
+
+  const cacheLocal = (list) => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch { /* cache opcional */ }
   }
+
+  const persistItems = (nextItems) => {
+    const previous = itemsRef.current
+    const before = new Map(previous.map((item) => [item.id, item]))
+    const nextIds = new Set(nextItems.map((item) => item.id))
+    const changed = nextItems.filter((item) => before.get(item.id) !== item)
+    const removed = previous.filter((item) => !nextIds.has(item.id)).map((item) => item.id)
+    itemsRef.current = nextItems
+    setItems(nextItems)
+    cacheLocal(nextItems)
+    if (!changed.length && !removed.length) return
+    pendingRef.current += 1
+    setSync('saving')
+    Promise.all([saveItems(changed), deleteItems(removed)])
+      .then(() => { setStorageError(''); if (pendingRef.current === 1) setSync('saved') })
+      .catch((error) => {
+        console.error('Falha ao salvar no banco:', error)
+        setSync('error')
+        setStorageError('Não foi possível salvar no banco online. Verifique a conexão — a alteração pode ser perdida.')
+      })
+      .finally(() => { pendingRef.current -= 1 })
+  }
+
+  useEffect(() => {
+    let active = true
+    const refresh = async (first) => {
+      if (pendingRef.current > 0) return
+      try {
+        const remote = await loadItems()
+        if (!active || pendingRef.current > 0) return
+        if (first && !remote.length) {
+          // Banco vazio: envia os dados atuais (locais ou de demonstração) como carga inicial
+          await saveItems(itemsRef.current)
+          setSync('saved')
+          return
+        }
+        itemsRef.current = remote
+        setItems(remote)
+        cacheLocal(remote)
+        setSync('saved')
+        setStorageError('')
+      } catch (error) {
+        console.error('Falha ao carregar do banco:', error)
+        if (active) { setSync('error'); setStorageError('Sem conexão com o banco online. Exibindo a última cópia salva neste navegador.') }
+      }
+    }
+    refresh(true)
+    const timer = window.setInterval(() => refresh(false), 10000)
+    const onFocus = () => refresh(false)
+    window.addEventListener('focus', onFocus)
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
+  }, [])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -190,7 +240,7 @@ function App() {
   const overdueCount = items.filter((item) => item.forecast && item.status !== 'done' && new Date(`${item.forecast}T23:59:59`) < new Date()).length
 
   const updateItem = (id, patch) => {
-    persistItems(items.map((item) => item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item))
+    persistItems(itemsRef.current.map((item) => item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item))
   }
 
   const createItem = () => {
@@ -198,19 +248,13 @@ function App() {
     const freshItem = {
       id: nextId, title: 'Nova atividade', status: 'todo', front: fronts[0], classification: classifications[0],
       modality: 'Importação', ticket: '', forecast: '', completed: '', priority: nextId, urgency: 'medium',
-      owner: '', description: '', blocked: false, comments: [], updatedAt: new Date().toISOString(),
+      owner: '', description: '', blocked: false, comments: [], updatedAt: new Date().toISOString(), createdAt: new Date().toISOString(),
     }
-    persistItems([freshItem, ...items])
+    persistItems(sortItems([freshItem, ...items]))
     setSelectedId(nextId)
     setToast('Atividade criada')
   }
 
-  const restoreData = () => {
-    persistItems(makeSeed())
-    setFilters({ front: '', classification: '', modality: '', urgency: '', owner: '' })
-    setQuery('')
-    setToast('Dados de demonstração restaurados')
-  }
 
   const exportCsv = () => {
     const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`
@@ -256,8 +300,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="demo-banner">
-        <span><strong>DEMONSTRAÇÃO</strong> — os dados ficam só no seu navegador.</span>
-        <button type="button" className="restore-link" onClick={restoreData}><Icon name="restore" size={13} /> Restaurar dados</button>
+        <span>{sync === 'loading' ? 'Carregando dados do banco…' : sync === 'saving' ? 'Salvando…' : sync === 'error' ? '⚠ Sem conexão com o banco — alterações podem não ser salvas' : '✓ Todas as alterações salvas no banco online'}</span>
       </div>
 
       <header className="topbar">
@@ -329,7 +372,7 @@ function App() {
       </main>
 
       {selectedItem && <ActivityDrawer key={selectedItem.id} item={selectedItem} onClose={() => setSelectedId(null)} onChange={(patch) => updateItem(selectedItem.id, patch)} onDelete={() => {
-        persistItems(items.filter((item) => item.id !== selectedItem.id))
+        persistItems(itemsRef.current.filter((item) => item.id !== selectedItem.id))
         setSelectedId(null)
         setToast('Atividade excluída')
       }} onAddComment={addComment} commentText={commentText} setCommentText={setCommentText} />}
