@@ -1,0 +1,121 @@
+/* ===== Tema escuro + escala maior — GAAe · Ações TECA ===== */
+:root, html, body { background: #0b1220; color-scheme: dark; }
+
+.app-shell {
+  zoom: 1.18;
+  min-height: calc(100vh / 1.18);
+  color: #dbe3ef;
+  background:
+    radial-gradient(1200px 500px at 10% -10%, rgba(52, 88, 237, .18), transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, rgba(255, 189, 46, .08), transparent 60%),
+    #0b1220;
+}
+
+/* Faixa e topo */
+.demo-banner { background: #070c16; color: #7fe0b5; font-size: 12px; border-bottom: 1px solid #18243a; }
+.topbar {
+  background: rgba(13, 21, 36, .85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #1d2a40;
+  position: sticky; top: 0; z-index: 20;
+  padding: 12px 22px;
+}
+.brand-mark { width: 40px; height: 40px; flex-basis: 40px; background: linear-gradient(145deg, #ffcb47, #f0a91c); color: #101827; box-shadow: 0 6px 18px rgba(255, 189, 46, .25); }
+.brand-copy h1 { color: #f3f6fb; font-size: 22px; letter-spacing: .02em; }
+.brand-copy p { color: #8796ad; font-size: 13px; }
+.header-actions { color: #93a1b6; }
+.online-indicator { font-size: 12px; }
+.online-indicator i { box-shadow: 0 0 0 3px rgba(36, 184, 138, .25); }
+.icon-button { background: #131d30; border-color: #26344b; color: #b5c1d3; }
+.icon-button:hover, .button-secondary:hover { background: #1a263c; border-color: #3a4b66; }
+
+.main-content { max-width: 1900px; padding: 20px 22px 48px; }
+
+/* Painel de resumo */
+.summary-panel { background: linear-gradient(180deg, #121c2e, #0e1726); border-color: #23314a; box-shadow: 0 14px 40px rgba(0, 0, 0, .35); }
+.summary-heading { font-size: 11px; min-height: 36px; }
+.summary-stat { min-height: 112px; padding: 14px 18px 12px; }
+.stat-label { font-size: 10.5px; }
+.stat-number { font-size: 34px; }
+.stat-hint { font-size: 12px; }
+.summary-progress { background: #1e2a3f; height: 5px; }
+.summary-progress span { background: linear-gradient(90deg, #3458ed, #20b887); }
+
+/* Barra de ferramentas */
+.toolbar { margin-top: 18px; gap: 10px; }
+.view-switch { background: #111a2b; border-color: #24324a; min-height: 42px; }
+.view-button { color: #8f9db2; font-size: 13px; min-height: 34px; padding: 0 14px; }
+.view-button:hover { color: #e3e9f2; background: #1a2539; }
+.view-button.selected { color: #fff; background: #2a3c63; border-color: #3d5385; }
+.search-box { background: #111a2b; border-color: #24324a; min-height: 42px; color: #7e8ca2; }
+.search-box:focus-within { border-color: #5d7cf3; box-shadow: 0 0 0 3px rgba(93, 124, 243, .2); }
+.search-input { color: #e3e9f2; font-size: 14px; }
+.search-input::placeholder { color: #6f7e95; }
+.search-box kbd { color: #8492a8; border-color: #2c3a52; }
+.button { min-height: 42px; font-size: 13px; padding: 0 16px; }
+.button-secondary { color: #dbe3ef; background: #111a2b; border-color: #24324a; }
+.button-primary { background: linear-gradient(180deg, #4568f5, #2f51e6); box-shadow: 0 8px 22px rgba(52, 88, 237, .35); }
+
+/* Filtros */
+.filter-row { margin: 14px 0 16px; gap: 10px; }
+.filter-select, .mine-filter { height: 34px; background: #111a2b; border-color: #24324a; color: #c3cedd; }
+.filter-select select, .mine-filter { font-size: 12.5px; }
+.filter-select select option { background: #111a2b; color: #dbe3ef; }
+.filter-select > .icon { color: #7d8ba1; }
+.mine-filter.active { color: #fff; background: #2a3c63; border-color: #4d66a8; }
+.activity-count { color: #8392a8; font-size: 12px; }
+
+/* Quadro */
+.board-grid { gap: 16px; }
+.board-column { background: rgba(17, 26, 43, .7); border-color: #1f2c42; padding: 12px; border-radius: 14px; min-height: 220px; }
+.board-column.drop-ready { background: rgba(52, 88, 237, .14); border-color: #4d66d8; }
+.column-heading h2 { color: #eef2f8; font-size: 15px; }
+.column-count { color: #b8c4d6; background: #1a263b; border-color: #2a3953; font-size: 11px; }
+.column-add { color: #8492a8; }
+.column-add:hover { background: #1a263b; color: #8ea6ff; }
+.activity-card {
+  background: linear-gradient(180deg, #172238, #131d30);
+  border-color: #26354e;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .25);
+  padding: 14px;
+  border-radius: 11px;
+  transition: transform .12s, border-color .12s, box-shadow .12s;
+}
+.activity-card:hover, .activity-card:focus-visible { border-color: #4d66d8; box-shadow: 0 10px 26px rgba(0, 0, 0, .4); transform: translateY(-2px); }
+.activity-card h3 { color: #eef2f8; font-size: 14.5px; line-height: 1.4; }
+.card-eyebrow { color: #8e9cb2; font-size: 10.5px; }
+.number-tag { color: #101827; background: #ffc333; font-size: 10.5px; }
+.card-tags span { color: #aebbd0; background: #1c2840; border-color: #2c3b56; font-size: 10.5px; }
+.card-footer { color: #7d8ca2; font-size: 11px; }
+.empty-column { color: #6f7f97; border-color: #2a3852; font-size: 12px; }
+
+/* Lista */
+.list-panel { background: #111a2b; border-color: #23314a; }
+.list-header { color: #8d9bb1; background: #0e1626; border-bottom-color: #22304a; font-size: 11px; }
+.list-row { color: #a9b6c9; background: #111a2b; border-bottom-color: #1d2a40; font-size: 13px; }
+.list-row:hover { background: #17233a; }
+.list-title { color: #eef2f8; }
+.no-results { color: #8392a8; }
+
+/* Painel (dashboard) */
+.dashboard-card { background: #111a2b; border-color: #23314a; }
+.dashboard-title h2 { color: #eef2f8; font-size: 16px; }
+.dashboard-title > span { color: #8392a8; }
+.donut { background: conic-gradient(#21b887 var(--percent), #2a3850 0); }
+.donut > div { background: #111a2b; }
+.donut strong { color: #f3f6fb; }
+.donut span, .empty-deadlines, .deadline-date, .bar-row small { color: #8796ad; }
+.legend > div, .bar-row, .deadline-list button { color: #c3cedd; }
+.legend strong { color: #f3f6fb; }
+.bar-row > div { background: #1c2840; }
+.bar-row > div i { background: #4d6ef0; }
+.deadline-list button { border-bottom-color: #1d2a40; }
+
+/* Gaveta lateral: tipografia maior */
+.activity-drawer { font-size: 14px; }
+.drawer-title, .title-editor { font-size: 20px; }
+.field-label { font-size: 11.5px; }
+.field > input, .field > select, .description-input, .comment-compose textarea { font-size: 13.5px; }
+
+/* Barra de rolagem */
+* { scrollbar-color: #2c3a52 transparent; }

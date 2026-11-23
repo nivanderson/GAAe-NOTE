@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import './theme.css'
 import { deleteItems, loadItems, saveItems, sortItems } from './db'
 
 const STORAGE_KEY = 'gaae-acoes-teca-v1'
