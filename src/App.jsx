@@ -1,47 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import './theme.css'
-import { deleteItems, loadItems, saveItems, sortItems } from './db'
+import * as api from './db'
+import { LoginScreen, PasswordModal, ROLE_LABELS, UsersModal } from './Auth'
 
-const STORAGE_KEY = 'gaae-acoes-teca-v1'
 const STATUSES = [
   { id: 'todo', label: 'Não iniciado', color: '#8995a8' },
   { id: 'doing', label: 'Em andamento', color: '#3858ed' },
   { id: 'review', label: 'Em homologação', color: '#f2b735' },
   { id: 'done', label: 'Concluído', color: '#20b887' },
-]
-
-const seedTitles = [
-  'Portal do Cliente',
-  'Portal do cliente',
-  'Identificação por tipo de bloqueio (MAPA, RF e serviços) para demonstração e visualização, no Portal do Cliente',
-  'Permitir a visualização do tipo de embalagem na Tela do cliente',
-  'Ajustes na consulta de processos de importação',
-  'Atualização de cadastro de clientes',
-  'Melhorias na tela de acompanhamento de cargas',
-  'Ajustar relatório de cargas recebidas',
-  'Validação de documentos do processo',
-  'Integração de dados com o sistema financeiro',
-  'Entrega de carga parcial em mais de um termo',
-  'Segregação de Faturamento correntista por processo (exemplo VALGROUP)',
-  'Relatórios MAPA: cargas bloqueadas (a inspecionar), condenadas, liberadas e histórico de bloqueio de cargas',
-  'SISTEMA GAAe deve aceitar a utilização de notas fiscais de presenças de cargas que foram devolvidas ao cliente',
-  'Tarifação automática com Rateio pelo Peso Bruto Recebido, para cargas importadas em mais de um TERMO',
-  'Revisar fluxo de recebimento de cargas',
-  'Exibir histórico de movimentações',
-  'Ajustes no painel de acompanhamento',
-  'Atualizar documentação operacional',
-  'Conferência de dados do manifesto',
-  'Melhorar busca por número de chamado',
-  'Disponibilizar novos filtros para relatórios',
-  'Revisar permissões de acesso',
-  'Ajuste de cálculo de armazenagem',
-  'Notificação de atualização de atividade',
-  'Otimizar carregamento da tela de processos',
-  'Incluir novos campos no cadastro',
-  'Ajustes de impressão de documentos',
-  'Revisão do fluxo de homologação',
-  'Adequação de dados para exportação',
 ]
 
 const fronts = [
@@ -59,43 +26,6 @@ const fronts = [
   'Regulatório',
 ]
 const classifications = ['Portal do Cliente', 'Importação', 'Recebimento', 'Financeiro', 'Relatórios', 'Operações']
-
-function makeSeed() {
-  return seedTitles.map((title, index) => ({
-    id: index + 1,
-    title,
-    status: index === 2 ? 'doing' : 'todo',
-    front: fronts[index % fronts.length],
-    classification: classifications[index % classifications.length],
-    modality: index === 0 || index === 1 ? 'Todos' : index % 2 ? 'Importação' : 'Internação',
-    ticket: index === 11 ? '289' : index === 14 ? '333' : '',
-    forecast: '',
-    completed: '',
-    priority: index === 11 ? 12 : index + 1,
-    urgency: index === 11 ? 'high' : 'medium',
-    owner: '',
-    description: index === 11
-      ? '1. Alinhar prazo para configuração de faturamento com ponto de corte no sistema (antes do fechamento da quinzena); Item obrigatório de reforma tributária, precisa estar disponível antes de 31/12/2026.'
-      : '',
-    blocked: false,
-    comments: [],
-    updatedAt: '',
-  }))
-}
-
-function loadInitialItems() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.every((item) => item && Number.isInteger(item.id) && item.title)) return parsed
-      throw new Error('Os dados salvos não estão no formato esperado.')
-    }
-  } catch (error) {
-    console.error('Não foi possível carregar os dados locais:', error)
-  }
-  return makeSeed()
-}
 
 function Icon({ name, size = 16 }) {
   const paths = {
@@ -133,8 +63,37 @@ function formatNow() {
   return new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date()).toUpperCase()
 }
 
+function initials(name = '') {
+  const parts = name.replace(/[._-]+/g, ' ').trim().split(/\s+/)
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase()
+}
+
 function App() {
-  const [items, setItems] = useState(loadInitialItems)
+  const [session, setSessionState] = useState(api.getSession)
+  const [expiredNotice, setExpiredNotice] = useState('')
+  const updateSession = (next) => { api.setSession(next); setSessionState(next) }
+
+  useEffect(() => {
+    if (!session) return
+    api.me(session.token).then((info) => {
+      if (info.role !== session.role) updateSession({ ...session, role: info.role })
+    }).catch((err) => { if (err.expired) { updateSession(null); setExpiredNotice(err.message) } })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!session) return <LoginScreen onLogin={(s) => { setExpiredNotice(''); updateSession(s) }} notice={expiredNotice} />
+  return <Workspace
+    key={session.token}
+    session={session}
+    onLogout={() => { api.logout(session.token); updateSession(null) }}
+    onExpired={() => { updateSession(null); setExpiredNotice('Sua sessão expirou. Entre novamente.') }}
+  />
+}
+
+function Workspace({ session, onLogout, onExpired }) {
+  const canEdit = session.role !== 'reader'
+  const isAdmin = session.role === 'admin'
+  const [modal, setModal] = useState(null)
+  const [items, setItems] = useState([])
   const [view, setView] = useState('board')
   const [selectedId, setSelectedId] = useState(null)
   const [query, setQuery] = useState('')
@@ -148,26 +107,23 @@ function App() {
   const itemsRef = useRef(items)
   const pendingRef = useRef(0)
 
-  const cacheLocal = (list) => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)) } catch { /* cache opcional */ }
-  }
-
   const persistItems = (nextItems) => {
     const previous = itemsRef.current
     const before = new Map(previous.map((item) => [item.id, item]))
     const nextIds = new Set(nextItems.map((item) => item.id))
     const changed = nextItems.filter((item) => before.get(item.id) !== item)
     const removed = previous.filter((item) => !nextIds.has(item.id)).map((item) => item.id)
+    if (!canEdit) return
     itemsRef.current = nextItems
     setItems(nextItems)
-    cacheLocal(nextItems)
     if (!changed.length && !removed.length) return
     pendingRef.current += 1
     setSync('saving')
-    Promise.all([saveItems(changed), deleteItems(removed)])
+    Promise.all([api.saveItems(session.token, changed), api.deleteItems(session.token, removed)])
       .then(() => { setStorageError(''); if (pendingRef.current === 1) setSync('saved') })
       .catch((error) => {
         console.error('Falha ao salvar no banco:', error)
+        if (error.expired) { onExpired(); return }
         setSync('error')
         setStorageError('Não foi possível salvar no banco online. Verifique a conexão — a alteração pode ser perdida.')
       })
@@ -176,30 +132,25 @@ function App() {
 
   useEffect(() => {
     let active = true
-    const refresh = async (first) => {
+    const refresh = async () => {
       if (pendingRef.current > 0) return
       try {
-        const remote = await loadItems()
+        const remote = await api.loadItems(session.token)
         if (!active || pendingRef.current > 0) return
-        if (first && !remote.length) {
-          // Banco vazio: envia os dados atuais (locais ou de demonstração) como carga inicial
-          await saveItems(itemsRef.current)
-          setSync('saved')
-          return
-        }
         itemsRef.current = remote
         setItems(remote)
-        cacheLocal(remote)
         setSync('saved')
         setStorageError('')
       } catch (error) {
         console.error('Falha ao carregar do banco:', error)
-        if (active) { setSync('error'); setStorageError('Sem conexão com o banco online. Exibindo a última cópia salva neste navegador.') }
+        if (!active) return
+        if (error.expired) { onExpired(); return }
+        setSync('error'); setStorageError('Sem conexão com o banco online.')
       }
     }
-    refresh(true)
-    const timer = window.setInterval(() => refresh(false), 10000)
-    const onFocus = () => refresh(false)
+    refresh()
+    const timer = window.setInterval(refresh, 10000)
+    const onFocus = () => refresh()
     window.addEventListener('focus', onFocus)
     return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', onFocus) }
   }, [])
@@ -220,7 +171,7 @@ function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLocaleLowerCase('pt-BR')
@@ -245,6 +196,7 @@ function App() {
   }
 
   const createItem = () => {
+    if (!canEdit) return
     const nextId = Math.max(0, ...items.map((item) => item.id)) + 1
     const freshItem = {
       id: nextId, title: 'Nova atividade', status: 'todo', front: fronts[0], classification: classifications[0],
@@ -278,7 +230,7 @@ function App() {
 
   const addComment = () => {
     if (!selectedItem || !commentText.trim()) return
-    const comment = { id: Date.now(), text: commentText.trim(), author: 'NC', createdAt: new Date().toISOString() }
+    const comment = { id: Date.now(), text: commentText.trim(), author: initials(session.username), authorName: session.username, createdAt: new Date().toISOString() }
     updateItem(selectedItem.id, { comments: [...(selectedItem.comments || []), comment] })
     setCommentText('')
   }
@@ -301,7 +253,7 @@ function App() {
   return (
     <div className="app-shell">
       <div className="demo-banner">
-        <span>{sync === 'loading' ? 'Carregando dados do banco…' : sync === 'saving' ? 'Salvando…' : sync === 'error' ? '⚠ Sem conexão com o banco — alterações podem não ser salvas' : '✓ Todas as alterações salvas no banco online'}</span>
+        <span>{sync === 'loading' ? 'Carregando dados…' : sync === 'saving' ? 'Salvando…' : sync === 'error' ? '⚠ Sem conexão com o banco — alterações podem não ser salvas' : canEdit ? '✓ Todas as alterações salvas · conexão protegida' : '🔒 Modo leitura — você pode visualizar, mas não alterar'}</span>
       </div>
 
       <header className="topbar">
@@ -313,10 +265,10 @@ function App() {
           </div>
         </div>
         <div className="header-actions">
-          <span className="online-indicator"><i /> só você online</span>
-          <span className="avatar avatar-small">NC</span>
-          <button type="button" className="icon-button notification-button" aria-label="Notificações" onClick={() => setToast('Você está em dia com as notificações')}><Icon name="bell" /></button>
-          <span className="avatar">NC</span>
+          <span className="user-chip"><span className="avatar">{initials(session.username)}</span><span><strong>{session.username}</strong><small>{ROLE_LABELS[session.role]}</small></span></span>
+          {isAdmin && <button type="button" className="button button-secondary header-btn" onClick={() => setModal('users')}><Icon name="user" size={15} /> Usuários</button>}
+          <button type="button" className="button button-secondary header-btn" onClick={() => setModal('password')}><Icon name="lock" size={15} /> Senha</button>
+          <button type="button" className="button button-secondary header-btn" onClick={onLogout}>Sair</button>
         </div>
       </header>
 
@@ -346,7 +298,7 @@ function App() {
             {query ? <button type="button" className="clear-search" onClick={() => setQuery('')} aria-label="Limpar busca"><Icon name="close" size={14} /></button> : <kbd>/</kbd>}
           </label>
           <button type="button" className="button button-secondary export-button" onClick={exportCsv}><Icon name="download" /> <span>Exportar</span></button>
-          <button type="button" className="button button-primary new-button" onClick={createItem}><Icon name="plus" /> <span>Nova atividade</span></button>
+          {canEdit && <button type="button" className="button button-primary new-button" onClick={createItem}><Icon name="plus" /> <span>Nova atividade</span></button>}
         </section>
 
         <section className="filter-row" aria-label="Filtros">
@@ -367,16 +319,18 @@ function App() {
           <span className="activity-count">{filteredItems.length} de {items.length} atividades</span>
         </section>
 
-        {view === 'board' && <Board items={filteredItems} draggedId={draggedId} onDragStart={setDraggedId} onDragEnd={() => setDraggedId(null)} onDrop={changeStatus} onOpen={setSelectedId} onCreate={createItem} />}
+        {view === 'board' && <Board items={filteredItems} draggedId={draggedId} onDragStart={setDraggedId} onDragEnd={() => setDraggedId(null)} onDrop={changeStatus} onOpen={setSelectedId} onCreate={createItem} canEdit={canEdit} />}
         {view === 'list' && <ActivityList items={filteredItems} onOpen={setSelectedId} />}
         {view === 'dashboard' && <Dashboard items={filteredItems} counts={counts} completedPercent={completedPercent} onOpen={setSelectedId} />}
       </main>
 
-      {selectedItem && <ActivityDrawer key={selectedItem.id} item={selectedItem} onClose={() => setSelectedId(null)} onChange={(patch) => updateItem(selectedItem.id, patch)} onDelete={() => {
+      {selectedItem && <ActivityDrawer key={selectedItem.id} canEdit={canEdit} item={selectedItem} onClose={() => setSelectedId(null)} onChange={(patch) => updateItem(selectedItem.id, patch)} onDelete={() => {
         persistItems(itemsRef.current.filter((item) => item.id !== selectedItem.id))
         setSelectedId(null)
         setToast('Atividade excluída')
       }} onAddComment={addComment} commentText={commentText} setCommentText={setCommentText} />}
+      {modal === 'users' && <UsersModal session={session} onClose={() => setModal(null)} onExpired={onExpired} />}
+      {modal === 'password' && <PasswordModal session={session} onClose={() => setModal(null)} onExpired={onExpired} />}
       {storageError && <div className="storage-warning" role="alert">{storageError}</div>}
       {toast && <div className="toast"><span className="toast-check">✓</span><span>{toast}</span><button type="button" aria-label="Fechar aviso" onClick={() => setToast('')}><Icon name="close" size={14} /></button></div>}
     </div>
@@ -396,7 +350,7 @@ function ViewButton({ id, current, onClick, icon, label }) {
   return <button type="button" role="tab" aria-selected={current === id} className={`view-button ${current === id ? 'selected' : ''}`} onClick={() => onClick(id)}><Icon name={icon} size={15} /><span>{label}</span></button>
 }
 
-function Board({ items, draggedId, onDragStart, onDragEnd, onDrop, onOpen, onCreate }) {
+function Board({ items, draggedId, onDragStart, onDragEnd, onDrop, onOpen, onCreate, canEdit }) {
   return <section className="board-grid" aria-label="Quadro Kanban">
     {STATUSES.map((status) => {
       const columnItems = items.filter((item) => item.status === status.id).sort((a, b) => a.priority - b.priority)
@@ -406,17 +360,17 @@ function Board({ items, draggedId, onDragStart, onDragEnd, onDrop, onOpen, onCre
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => { event.preventDefault(); if (draggedId) onDrop(draggedId, status.id) }}
       >
-        <div className="column-heading"><div><StatusDot status={status.id} /><h2>{status.label}</h2><span className="column-count">{columnItems.length}</span></div><button type="button" className="column-add" aria-label={`Adicionar em ${status.label}`} onClick={onCreate}><Icon name="plus" /></button></div>
+        <div className="column-heading"><div><StatusDot status={status.id} /><h2>{status.label}</h2><span className="column-count">{columnItems.length}</span></div>{canEdit && <button type="button" className="column-add" aria-label={`Adicionar em ${status.label}`} onClick={onCreate}><Icon name="plus" /></button>}</div>
         <div className="card-list">
-          {columnItems.length ? columnItems.map((item) => <ActivityCard key={item.id} item={item} onOpen={onOpen} onDragStart={onDragStart} onDragEnd={onDragEnd} />) : <div className="empty-column">Arraste uma atividade para cá</div>}
+          {columnItems.length ? columnItems.map((item) => <ActivityCard key={item.id} item={item} onOpen={onOpen} onDragStart={onDragStart} onDragEnd={onDragEnd} canEdit={canEdit} />) : <div className="empty-column">{canEdit ? 'Arraste uma atividade para cá' : 'Nenhuma atividade'}</div>}
         </div>
       </div>
     })}
   </section>
 }
 
-function ActivityCard({ item, onOpen, onDragStart, onDragEnd }) {
-  return <article className="activity-card" draggable onDragStart={() => onDragStart(item.id)} onDragEnd={onDragEnd} onClick={() => onOpen(item.id)} onKeyDown={(event) => { if (event.key === 'Enter') onOpen(item.id) }} tabIndex={0} role="button" aria-label={`Abrir atividade ${item.id}: ${item.title}`}>
+function ActivityCard({ item, onOpen, onDragStart, onDragEnd, canEdit }) {
+  return <article className="activity-card" draggable={canEdit} onDragStart={() => onDragStart(item.id)} onDragEnd={onDragEnd} onClick={() => onOpen(item.id)} onKeyDown={(event) => { if (event.key === 'Enter') onOpen(item.id) }} tabIndex={0} role="button" aria-label={`Abrir atividade ${item.id}: ${item.title}`}>
     <div className="card-eyebrow"><span className="number-tag">#{String(item.id).padStart(2, '0')}</span><span>{item.classification}</span>{item.urgency === 'high' && <span className="urgency-mark">Ⅲ</span>}</div>
     <h3>{item.title}</h3>
     <div className="card-tags"><span>{item.front}</span><span>{item.modality}</span>{item.ticket && <span>{item.ticket}</span>}</div>
@@ -462,7 +416,7 @@ function BarList({ rows, max }) {
   return <div className="bar-list">{rows.length ? rows.map(([label, count]) => <div className="bar-row" key={label}><span title={label}>{label}</span><div><i style={{ width: `${count / max * 100}%` }} /></div><small>{count}</small></div>) : <div className="no-results">Sem dados para exibir.</div>}</div>
 }
 
-function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, commentText, setCommentText }) {
+function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, commentText, setCommentText, canEdit }) {
   const [titleEditing, setTitleEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
   const saveTitle = () => {
@@ -479,8 +433,8 @@ function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, comme
   return <div className="drawer-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <aside className="activity-drawer" aria-label={`Detalhes da atividade ${item.id}`}>
       <div className="drawer-top"><div className="drawer-status"><span className="number-tag">#{String(item.id).padStart(2, '0')}</span><span className="status-pill"><StatusDot status={item.status} />{status?.label}</span></div><button type="button" className="icon-button drawer-close" onClick={onClose} aria-label="Fechar detalhes"><Icon name="close" /></button></div>
-      <div className="drawer-content">
-        {titleEditing ? <textarea className="title-editor" value={title} autoFocus onChange={(event) => setTitle(event.target.value)} onBlur={saveTitle} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); saveTitle() } }} /> : <h2 className="drawer-title" tabIndex={0} onClick={() => setTitleEditing(true)} onKeyDown={(event) => { if (event.key === 'Enter') setTitleEditing(true) }} title="Clique para editar">{item.title}</h2>}
+      <div className="drawer-content"><fieldset className="drawer-fieldset" disabled={!canEdit}>
+        {titleEditing ? <textarea className="title-editor" value={title} autoFocus onChange={(event) => setTitle(event.target.value)} onBlur={saveTitle} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); saveTitle() } }} /> : <h2 className="drawer-title" tabIndex={0} onClick={() => canEdit && setTitleEditing(true)} onKeyDown={(event) => { if (canEdit && event.key === 'Enter') setTitleEditing(true) }} title={canEdit ? 'Clique para editar' : ''}>{item.title}</h2>}
         <div className="status-choice">{STATUSES.map((entry) => <button type="button" key={entry.id} className={entry.id === item.status ? 'current' : ''} onClick={() => onChange({ status: entry.id })}><StatusDot status={entry.id} />{entry.label}</button>)}</div>
         <section className="assignees-section"><label className="field-label">Responsáveis</label><div className="assignee-editor"><Icon name="plus" size={13} /><input value={item.owner} onChange={(event) => onChange({ owner: event.target.value })} placeholder="Atribuir pessoa" aria-label="Responsável" /></div><p>Quem é atribuído recebe aviso no sino, e também quando a atividade muda de status ou recebe comentário.</p></section>
         <div className="detail-fields">
@@ -496,11 +450,11 @@ function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, comme
         <Field label="Descrição e comentários da planilha"><textarea className="description-input" value={item.description} onChange={(event) => onChange({ description: event.target.value })} placeholder="Adicione contexto, requisitos ou detalhes da atividade..." /></Field>
         <label className="blocked-toggle"><input type="checkbox" checked={item.blocked} onChange={(event) => onChange({ blocked: event.target.checked })} /><span className="toggle-track" /><span>Atividade bloqueada</span></label>
         <section className="comments-section"><div className="field-label">Comentários · {(item.comments || []).length}</div>
-          {item.comments?.length ? <div className="comment-list">{item.comments.map((comment) => <article className="comment-item" key={comment.id}><span className="avatar avatar-small">{comment.author}</span><div><strong>{comment.author}</strong><time>{new Date(comment.createdAt).toLocaleString('pt-BR')}</time><p>{comment.text}</p></div></article>)}</div> : <p className="no-comments">Nenhum comentário ainda. Registre decisões, dúvidas e combinados aqui.</p>}
-          <div className="comment-compose"><textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Escreva um comentário..." onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onAddComment() } }} /><button type="button" onClick={onAddComment} disabled={!commentText.trim()}>Comentar</button></div>
+          {item.comments?.length ? <div className="comment-list">{item.comments.map((comment) => <article className="comment-item" key={comment.id}><span className="avatar avatar-small">{comment.author}</span><div><strong>{comment.authorName || comment.author}</strong><time>{new Date(comment.createdAt).toLocaleString('pt-BR')}</time><p>{comment.text}</p></div></article>)}</div> : <p className="no-comments">Nenhum comentário ainda. Registre decisões, dúvidas e combinados aqui.</p>}
+          {canEdit && <div className="comment-compose"><textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Escreva um comentário..." onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onAddComment() } }} /><button type="button" onClick={onAddComment} disabled={!commentText.trim()}>Comentar</button></div>}
         </section>
-      </div>
-      <footer className="drawer-footer"><span>{item.updatedAt ? `Atualizada ${new Date(item.updatedAt).toLocaleString('pt-BR')}` : 'Atualizada há 4 h por Planilha'}</span><button type="button" className="delete-button" onClick={onDelete}><Icon name="trash" size={14} /> Excluir</button></footer>
+      </fieldset></div>
+      <footer className="drawer-footer"><span>{item.updatedAt ? `Atualizada ${new Date(item.updatedAt).toLocaleString('pt-BR')}` : 'Sem alterações registradas'}</span>{canEdit && <button type="button" className="delete-button" onClick={() => { if (window.confirm('Excluir esta atividade?')) onDelete() }}><Icon name="trash" size={14} /> Excluir</button>}</footer>
     </aside>
   </div>
 }
