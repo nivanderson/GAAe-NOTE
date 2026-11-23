@@ -20,6 +20,8 @@ const MESSAGES = {
   NAO_PODE_REBAIXAR_A_SI_MESMO: 'Você não pode rebaixar ou desativar o próprio usuário.',
   NAO_PODE_EXCLUIR_A_SI_MESMO: 'Você não pode excluir o próprio usuário.',
   JA_CONFIGURADO: 'O administrador já foi criado. Faça login.',
+  TAREFA_JA_EXISTE: 'Essa tarefa já existe (já foi restaurada ou o número foi reutilizado).',
+  REGISTRO_INVALIDO: 'Registro de exclusão não encontrado.',
 }
 
 export class ApiError extends Error {
@@ -65,6 +67,10 @@ export const listUsers = (token) => rpc('app_list_users', { p_token: token })
 export const createUser = (token, username, password, role) => rpc('app_create_user', { p_token: token, p_username: username, p_password: password, p_role: role })
 export const updateUser = (token, id, role, active, newPassword = null) => rpc('app_update_user', { p_token: token, p_id: id, p_role: role, p_active: active, p_new_password: newPassword })
 export const deleteUser = (token, id) => rpc('app_delete_user', { p_token: token, p_id: id })
+
+// ---- Histórico ----
+export const getHistory = (token, taskId = null, limit = 300) => rpc('app_get_history', { p_token: token, p_task_id: taskId, p_limit: limit })
+export const restoreTask = (token, historyId) => rpc('app_restore_task', { p_token: token, p_history_id: historyId })
 
 // ---- Tarefas ----
 export function sortItems(items) {

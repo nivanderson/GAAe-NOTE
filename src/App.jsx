@@ -3,6 +3,7 @@ import './App.css'
 import './theme.css'
 import * as api from './db'
 import { LoginScreen, PasswordModal, ROLE_LABELS, UsersModal } from './Auth'
+import { HistoryModal, TaskHistory } from './History'
 
 const STATUSES = [
   { id: 'todo', label: 'Não iniciado', color: '#8995a8' },
@@ -266,6 +267,7 @@ function Workspace({ session, onLogout, onExpired }) {
         </div>
         <div className="header-actions">
           <span className="user-chip"><span className="avatar">{initials(session.username)}</span><span><strong>{session.username}</strong><small>{ROLE_LABELS[session.role]}</small></span></span>
+          {isAdmin && <button type="button" className="button button-secondary header-btn" onClick={() => setModal('history')}><Icon name="restore" size={15} /> Histórico</button>}
           {isAdmin && <button type="button" className="button button-secondary header-btn" onClick={() => setModal('users')}><Icon name="user" size={15} /> Usuários</button>}
           <button type="button" className="button button-secondary header-btn" onClick={() => setModal('password')}><Icon name="lock" size={15} /> Senha</button>
           <button type="button" className="button button-secondary header-btn" onClick={onLogout}>Sair</button>
@@ -324,12 +326,13 @@ function Workspace({ session, onLogout, onExpired }) {
         {view === 'dashboard' && <Dashboard items={filteredItems} counts={counts} completedPercent={completedPercent} onOpen={setSelectedId} />}
       </main>
 
-      {selectedItem && <ActivityDrawer key={selectedItem.id} canEdit={canEdit} item={selectedItem} onClose={() => setSelectedId(null)} onChange={(patch) => updateItem(selectedItem.id, patch)} onDelete={() => {
+      {selectedItem && <ActivityDrawer key={selectedItem.id} canEdit={canEdit} session={session} onExpired={onExpired} historyKey={`${selectedItem.updatedAt}-${sync}`} item={selectedItem} onClose={() => setSelectedId(null)} onChange={(patch) => updateItem(selectedItem.id, patch)} onDelete={() => {
         persistItems(itemsRef.current.filter((item) => item.id !== selectedItem.id))
         setSelectedId(null)
         setToast('Atividade excluída')
       }} onAddComment={addComment} commentText={commentText} setCommentText={setCommentText} />}
       {modal === 'users' && <UsersModal session={session} onClose={() => setModal(null)} onExpired={onExpired} />}
+      {modal === 'history' && <HistoryModal session={session} onClose={() => setModal(null)} onExpired={onExpired} onRestored={() => api.loadItems(session.token).then((list) => { itemsRef.current = list; setItems(list) }).catch(() => {})} />}
       {modal === 'password' && <PasswordModal session={session} onClose={() => setModal(null)} onExpired={onExpired} />}
       {storageError && <div className="storage-warning" role="alert">{storageError}</div>}
       {toast && <div className="toast"><span className="toast-check">✓</span><span>{toast}</span><button type="button" aria-label="Fechar aviso" onClick={() => setToast('')}><Icon name="close" size={14} /></button></div>}
@@ -416,7 +419,7 @@ function BarList({ rows, max }) {
   return <div className="bar-list">{rows.length ? rows.map(([label, count]) => <div className="bar-row" key={label}><span title={label}>{label}</span><div><i style={{ width: `${count / max * 100}%` }} /></div><small>{count}</small></div>) : <div className="no-results">Sem dados para exibir.</div>}</div>
 }
 
-function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, commentText, setCommentText, canEdit }) {
+function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, commentText, setCommentText, canEdit, session, onExpired, historyKey }) {
   const [titleEditing, setTitleEditing] = useState(false)
   const [title, setTitle] = useState(item.title)
   const saveTitle = () => {
@@ -453,7 +456,9 @@ function ActivityDrawer({ item, onClose, onChange, onDelete, onAddComment, comme
           {item.comments?.length ? <div className="comment-list">{item.comments.map((comment) => <article className="comment-item" key={comment.id}><span className="avatar avatar-small">{comment.author}</span><div><strong>{comment.authorName || comment.author}</strong><time>{new Date(comment.createdAt).toLocaleString('pt-BR')}</time><p>{comment.text}</p></div></article>)}</div> : <p className="no-comments">Nenhum comentário ainda. Registre decisões, dúvidas e combinados aqui.</p>}
           {canEdit && <div className="comment-compose"><textarea value={commentText} onChange={(event) => setCommentText(event.target.value)} placeholder="Escreva um comentário..." onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); onAddComment() } }} /><button type="button" onClick={onAddComment} disabled={!commentText.trim()}>Comentar</button></div>}
         </section>
-      </fieldset></div>
+      </fieldset>
+        <TaskHistory session={session} taskId={item.id} refreshKey={historyKey} onExpired={onExpired} />
+      </div>
       <footer className="drawer-footer"><span>{item.updatedAt ? `Atualizada ${new Date(item.updatedAt).toLocaleString('pt-BR')}` : 'Sem alterações registradas'}</span>{canEdit && <button type="button" className="delete-button" onClick={() => { if (window.confirm('Excluir esta atividade?')) onDelete() }}><Icon name="trash" size={14} /> Excluir</button>}</footer>
     </aside>
   </div>

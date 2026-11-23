@@ -192,3 +192,22 @@
 /* Gaveta somente leitura */
 .drawer-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: contents; }
 .drawer-fieldset:disabled input, .drawer-fieldset:disabled select, .drawer-fieldset:disabled textarea, .drawer-fieldset:disabled button { cursor: not-allowed; opacity: .75; }
+
+/* ===== Histórico ===== */
+.history-section { display: grid; gap: 10px; margin-top: 6px; }
+.hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.hist-item { padding: 10px 12px; background: #0e1726; border: 1px solid #22304a; border-left: 3px solid #4d6ef0; border-radius: 9px; font-size: 13px; color: #c3cedd; }
+.hist-item.hist-comment { border-left-color: #f2b735; }
+.hist-item.hist-create { border-left-color: #20b887; }
+.hist-item.hist-delete { border-left-color: #e0485d; }
+.hist-meta { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.hist-meta strong { color: #eef2f8; }
+.hist-meta time { color: #7d8ca2; font-size: 11.5px; white-space: nowrap; }
+.hist-task { color: #9fb4ff; font-size: 12px; margin-bottom: 3px; }
+.hist-body { line-height: 1.5; word-break: break-word; }
+.hist-body strong { color: #eef2f8; }
+.hist-old { color: #ff9aa8; text-decoration: line-through; text-decoration-color: rgba(255, 154, 168, .5); }
+.hist-new { color: #7fe0b5; }
+.hist-del { color: #ff9aa8; font-weight: 600; }
+.hist-restore { margin-left: 10px; height: 26px; padding: 0 10px; color: #7fe0b5; background: rgba(32, 184, 135, .12); border: 1px solid rgba(32, 184, 135, .45); border-radius: 13px; font-size: 11.5px; cursor: pointer; }
+.modal-wide .hist-list { max-height: 60vh; overflow: auto; padding-right: 4px; }
